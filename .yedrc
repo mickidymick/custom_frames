@@ -2,10 +2,18 @@ set builder-build-command './build.sh'
 plugins-add-dir           '~/tmp_yed/custom_frames'
 plugin-load               'custom_frames'
 
-set-custom-buffer-frame    "go-menu" "f" 0.5 0.0 0.5 1.0 0 "*go-menu"
+# set-custom-buffer-frame    "go-menu"        "f" 1 0.5 0.0 0.5 1.0   0 "*go-menu"
+# set-custom-buffer-frame    "builder-output" "f" 0 0.5 0.0 0.5 1.0   0 "*builder-output"
+
+set-custom-buffer-frame    "right" "s" 0 "v" "r" "r" 0.5   1 1 0.1 150 "*log *go-menu"
+# set-custom-buffer-frame    "right" "s" 0 "v" "l" "r" 0.5  1 0 "*log *go-menu"
+set-custom-buffer-frame    "tray"  "s" 0 "h" "b" "r" 0.25  0 1 0.1 90 "*builder-output"
+
+# set-custom-buffer-frame (frame-name[""]) (split/float['s'/'f']) (close-after[0/1]) (max-x[0.0/1.0]) (max-y[0.0/1.0]) (max-width[0.0/1.0]) (max-height[0.0/1.0]) (use-animation[0/1])
+#                                                                                    (min-x[0.0/1.0]) (min-y[0.0/1.0]) (min-width[0.0/1.0]) (min-height[0.0/1.0]) (speed[int]) (buff-arr["*buff *buff *buff"])
+# set-custom-buffer-frame (frame-name[""]) (split/float['s'/'f']) (close-after[0/1]) (max-split['h'/'v']) (max-loc[('t'/'b')/('l'/'r')]) (max-use-root['r'/'a']) (max-size[int]) (max-heirarchy[int]) (use-animation[0/1])
+#                                                                                    (min-size[int]) (speed[int]) (buff-arr["*buff *buff *buff"])
 
 
-
-# set-custom-buffer-frame    "*builder-output" 0.0 0.5 1.0 0.5 0
 # set-custom-buffer-frame    "*calc"    0.25 0.25 0.5 0.5 0
 vimish-bind normal "ctrl-k" special-buffer-prepare-unfocus-active
