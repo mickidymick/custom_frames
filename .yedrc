@@ -5,7 +5,7 @@ plugin-load               'custom_frames'
 # set-custom-buffer-frame    "go-menu"        "f" 1 0.5 0.0 0.5 1.0   0 "*go-menu"
 # set-custom-buffer-frame    "builder-output" "f" 0 0.5 0.0 0.5 1.0   0 "*builder-output"
 
-set-custom-buffer-frame    "right" "s" 0 "v" "r" "r" 0.5   1 1 0.1 150 "*log *go-menu"
+set-custom-buffer-frame    "right" "s" 0 "v" "r" "r" 0.5   1 1 0.1 150 "*go-menu"
 # set-custom-buffer-frame    "right" "s" 0 "v" "l" "r" 0.5  1 0 "*log *go-menu"
 set-custom-buffer-frame    "tray"  "s" 0 "h" "b" "r" 0.25  0 1 0.1 90 "*builder-output"
 

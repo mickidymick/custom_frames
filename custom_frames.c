@@ -1,11 +1,12 @@
 #include <yed/plugin.h>
 
 typedef struct {
-    int   animating;
     char *frame_name;
     int   r_c;
     int   want_size;
     int   s_l;
+    int   speed;
+    int   done;
 } current_animation;
 
 typedef union {
@@ -49,11 +50,11 @@ typedef struct {
 static yed_plugin       *Self;
 static yed_frame        *save_frame;
 static array_t           custom_frame_buffers;
+static array_t           current_animations;
 static int               animating;
 static yed_event_handler epump_anim;
 static yed_event_handler eframe_act;
 static int               save_hz;
-static current_animation curr_anim;
 
 /* command replacement functions*/
 static void _special_buffer_prepare_focus(int n_args, char **args);
@@ -66,7 +67,7 @@ static void _start_tray_animate(int rows);
 static void _tray_animate(yed_event *event);
 static void _custom_frames_unload(yed_plugin *self);
 static void _create_new_frame(char loc, char use_root, float size, int heirarchy);
-static void _start_frame_animate(int want_size, int speed, char *frame_name, int r_c, int s_l);
+static void _start_frame_animate(void);
 static void _frame_animate(yed_event *event);
 static void _frame_animate_on_change(yed_event *event);
 static void _start(custom_buffer_data **data_it, int min);
@@ -80,12 +81,15 @@ int yed_plugin_boot(yed_plugin *self) {
 
     Self = self;
 
-    custom_frame_buffers = array_make(struct custom_buffer_data *);
-    memset(&curr_anim, 0, sizeof(current_animation));
+    custom_frame_buffers = array_make(custom_buffer_data *);
+    current_animations   = array_make(current_animation);
 
     eframe_act.kind = EVENT_FRAME_PRE_ACTIVATE;
     eframe_act.fn   = _frame_animate_on_change;
-   yed_plugin_add_event_handler(Self, eframe_act);
+
+    save_hz = 0;
+
+    yed_plugin_add_event_handler(Self, eframe_act);
 
     yed_plugin_set_command(self, "special-buffer-prepare-focus", _special_buffer_prepare_focus);
     yed_plugin_set_command(self, "special-buffer-prepare-unfocus", _special_buffer_prepare_unfocus);
@@ -116,6 +120,7 @@ static void _special_buffer_prepare_focus(int n_args, char **args) {
     array_traverse(custom_frame_buffers, data_it) {
         array_traverse((*data_it)->buff_name, data_it_inner) {
             if (strcmp((*data_it_inner), args[0]) == 0) {
+
                 if ((*data_it)->is_split == 'f') {
                     frame = yed_find_frame_by_name((*data_it)->frame_name); //broken here
                     if (frame == NULL) {
@@ -200,142 +205,201 @@ static void _special_buffer_prepare_focus(int n_args, char **args) {
     }
 }
 
-static void _start_frame_animate(int want_size, int speed, char *frame_name, int r_c, int s_l) {
+static void _add_frame_to_animate(int want_size, int speed, char *frame_name, int r_c, int s_l) {
+    current_animation *curr_anim_it;
+    current_animation  curr_anim;
+    yed_frame          *frame;
+
+    memset(&curr_anim, 0, sizeof(current_animation));
+    curr_anim.want_size  = want_size;
+    curr_anim.frame_name = frame_name;
+    curr_anim.r_c        = r_c;
+    curr_anim.s_l        = s_l;
+    curr_anim.speed      = speed;
+    curr_anim.done       = 0;
+
+    frame = yed_find_frame_by_name(curr_anim.frame_name);
+    if (!frame) { return; }
+
+    array_traverse(current_animations, curr_anim_it) {
+        if (curr_anim_it->frame_name == frame_name) {
+            memcpy(curr_anim_it, &curr_anim, sizeof(current_animation));
+            return;
+        }
+    }
+
+    array_push(current_animations, curr_anim);
+}
+
+static void _start_frame_animate(void) {
+    int                speed;
+    current_animation *curr_anim;
+
     if (animating) { return; }
 
     epump_anim.kind = EVENT_PRE_PUMP;
     epump_anim.fn   = _frame_animate;
 
-    save_hz = yed_get_update_hz();
+    if (array_len(current_animations) == 0) {
+        save_hz = yed_get_update_hz();
+    }
 
-    curr_anim.want_size  = want_size;
-    curr_anim.frame_name = frame_name;
-    curr_anim.r_c        = r_c;
-    curr_anim.s_l        = s_l;
-    curr_anim.animating  = 1;
+    speed = 0;
 
-    yed_frame *frame;
-    frame = yed_find_frame_by_name(curr_anim.frame_name);
-    if (!frame) { return; }
+    array_traverse(current_animations, curr_anim) {
+        if (curr_anim->speed > speed) {
+            speed = curr_anim->speed;
+        }
+    }
 
-    yed_plugin_add_event_handler(Self, epump_anim);
     yed_set_update_hz(speed);
+    yed_plugin_add_event_handler(Self, epump_anim);
 }
 
 static void _frame_animate(yed_event *event) {
-    yed_frame *frame;
-    yed_frame *other;
-    int        curr_size;
+    yed_frame         *frame;
+    yed_frame_tree    *other;
+    int                curr_size;
+    current_animation *curr_anim;
 
-    if (curr_anim.frame_name == NULL) {
-        return;
+    array_traverse(current_animations, curr_anim) {
+
+        if (curr_anim->frame_name == NULL) {
+            continue;
+        }
+
+        frame = yed_find_frame_by_name(curr_anim->frame_name);
+
+        if (!frame) {
+            continue;
+        }
+
+        if (curr_anim->r_c) {
+            curr_size = frame->width;
+        } else {
+            curr_size = frame->height;
+        }
+
+        if ((!curr_anim->s_l && (curr_size <= curr_anim->want_size)) ||
+            ( curr_anim->s_l && (curr_size >= curr_anim->want_size))) {
+            curr_anim->done = 1;
+            continue;
+        }
+
+        if (frame->tree->parent == NULL) {
+            continue;
+        }
+
+        if (frame->tree->parent->child_trees[0] == frame->tree) {
+            if (curr_anim->r_c) {
+                yed_resize_frame(frame, 0, (curr_anim->want_size - curr_size) < 0 ? -1 : 1);
+            } else {
+                yed_resize_frame(frame, (curr_anim->want_size - curr_size) < 0 ? -1 : 1, 0);
+            }
+        } else {
+            other = frame->tree->parent->child_trees[0];
+            if (curr_anim->r_c) {
+                yed_resize_frame_tree(other, 0, (curr_anim->want_size - curr_size) < 0 ? 1 : -1);
+            } else {
+                yed_resize_frame_tree(other, (curr_anim->want_size - curr_size) < 0 ? 1 : -1, 0);
+            }
+        }
     }
 
-    frame = yed_find_frame_by_name(curr_anim.frame_name);
+check_again:;
+    int indx = 0;
+    array_traverse(current_animations, curr_anim) {
+        if (curr_anim->done == 1) {
+            array_delete(current_animations, indx);
+            goto check_again;
+        }
+        indx++;
+    }
 
-    if (!frame) {
-done:;
-        curr_anim.want_size  = 0;
-        curr_anim.frame_name = NULL;
-        curr_anim.r_c        = 0;
-        curr_anim.animating  = 0;
+    if (array_len(current_animations) == 0) {
         yed_set_update_hz(save_hz);
         yed_delete_event_handler(epump_anim);
-        return;
-    }
-
-    if (curr_anim.r_c) {
-        curr_size = frame->width;
-    } else {
-        curr_size = frame->height;
-    }
-
-    if ((!curr_anim.s_l && (curr_size <= curr_anim.want_size)) ||
-        ( curr_anim.s_l && (curr_size >= curr_anim.want_size))) {
-        goto done;
-    }
-
-    if (frame->tree->parent == NULL) {
-        return;
-    }
-
-    if (frame->tree->parent->child_trees[0] == frame->tree) {
-        if (curr_anim.r_c) {
-            yed_resize_frame(frame, 0, (curr_anim.want_size - curr_size) < 0 ? -1 : 1);
-        } else {
-            yed_resize_frame(frame, (curr_anim.want_size - curr_size) < 0 ? -1 : 1, 0);
-        }
-    } else {
-        other = frame->tree->parent->child_trees[0]->frame;
-        if (curr_anim.r_c) {
-            yed_resize_frame(other, 0, (curr_anim.want_size - curr_size) < 0 ? 1 : -1);
-        } else {
-            yed_resize_frame(other, (curr_anim.want_size - curr_size) < 0 ? 1 : -1, 0);
-        }
     }
 }
 
 static void _frame_animate_on_change(yed_event *event) {
     custom_buffer_data **data_it;
     yed_frame           *frame;
-    int                  no_name;
-    int                  no_name_last;
-
-    no_name      = 0;
-    no_name_last = 0;
-    yed_log("change");
+    current_animation   *curr_anim;
 
     if (!(ys->active_frame) || !event || !(event->frame)) { return; }
 
-    if (event->frame->name) {
-        array_traverse(custom_frame_buffers, data_it) {
-            if (strcmp((*data_it)->frame_name, event->frame->name) == 0) {
-                if ((*data_it)->use_animation == 1) {
-                    _start(data_it, 0);
-                }
+    if (event->frame->name && ys->active_frame->name && strcmp(event->frame->name, ys->active_frame->name) == 0) {
+        if (event->frame->name) {
+            array_traverse(custom_frame_buffers, data_it) {
+                if (strcmp((*data_it)->frame_name, event->frame->name) == 0) {
+                    if ((*data_it)->use_animation == 1) {
+                        _start(data_it, 0);
+                    }
 
-                if ((*data_it)->close_after) {
-                    frame = yed_find_frame_by_name(curr_anim.frame_name);
-                    if (frame) { yed_delete_frame(frame); }
+                    if ((*data_it)->close_after) {
+                        array_traverse(current_animations, curr_anim) {
+                            frame = yed_find_frame_by_name(curr_anim->frame_name);
+                        }
+                        if (frame) { yed_delete_frame(frame); }
+                    }
+                    break;
                 }
-                break;
+            }
+        }
+    } else {
+        if (event->frame->name) {
+            array_traverse(custom_frame_buffers, data_it) {
+                if (strcmp((*data_it)->frame_name, event->frame->name) == 0) {
+                    if ((*data_it)->use_animation == 1) {
+                        _start(data_it, 0);
+                    }
+
+                    if ((*data_it)->close_after) {
+                        array_traverse(current_animations, curr_anim) {
+                            frame = yed_find_frame_by_name(curr_anim->frame_name);
+                        }
+                        if (frame) { yed_delete_frame(frame); }
+                    }
+                    break;
+                }
+            }
+        }
+
+        if (ys->active_frame->name) {
+            array_traverse(custom_frame_buffers, data_it) {
+                if (strcmp((*data_it)->frame_name, ys->active_frame->name) == 0) {
+                    if ((*data_it)->use_animation == 1) {
+                        _start(data_it, 1);
+                    }
+
+                    if ((*data_it)->close_after) {
+                        array_traverse(current_animations, curr_anim) {
+                            frame = yed_find_frame_by_name(curr_anim->frame_name);
+                        }
+                        if (frame) { yed_delete_frame(frame); }
+                    }
+                    break;
+                }
             }
         }
     }
 
-    if (ys->active_frame->name) {
-        array_traverse(custom_frame_buffers, data_it) {
-            if (strcmp((*data_it)->frame_name, ys->active_frame->name) == 0) {
-                if ((*data_it)->use_animation == 1) {
-                    _start(data_it, 1);
-                }
-
-                if ((*data_it)->close_after) {
-                    frame = yed_find_frame_by_name(curr_anim.frame_name);
-                    if (frame) { yed_delete_frame(frame); }
-                }
-                break;
-            }
-        }
-    }
+_start_frame_animate();
 }
 
 static void _start(custom_buffer_data **data_it, int min) {
     if (min) {
         if ((*data_it)->animation.r_c) {
-            yed_log(" woo 1");
-            _start_frame_animate((*data_it)->min_frame_size.size * ys->term_cols, (*data_it)->animation.speed, (*data_it)->frame_name, 1, 0);
+            _add_frame_to_animate((*data_it)->min_frame_size.size * ys->term_cols, (*data_it)->animation.speed, (*data_it)->frame_name, 1, 0);
         } else {
-            yed_log(" woo 2");
-            _start_frame_animate((*data_it)->min_frame_size.size * ys->term_rows, (*data_it)->animation.speed, (*data_it)->frame_name, 0, 0);
+            _add_frame_to_animate((*data_it)->min_frame_size.size * ys->term_rows, (*data_it)->animation.speed, (*data_it)->frame_name, 0, 0);
         }
     } else {
         if ((*data_it)->animation.r_c) {
-            yed_log(" woo 3");
-            _start_frame_animate((*data_it)->max_frame_size.size * ys->term_cols, (*data_it)->animation.speed, (*data_it)->frame_name, 1, 1);
+            _add_frame_to_animate((*data_it)->max_frame_size.size * ys->term_cols, (*data_it)->animation.speed, (*data_it)->frame_name, 1, 1);
         } else {
-            yed_log(" woo 4");
-            _start_frame_animate((*data_it)->max_frame_size.size * ys->term_rows, (*data_it)->animation.speed, (*data_it)->frame_name, 0, 1);
+            _add_frame_to_animate((*data_it)->max_frame_size.size * ys->term_rows, (*data_it)->animation.speed, (*data_it)->frame_name, 0, 1);
         }
     }
 }
