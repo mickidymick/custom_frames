@@ -57,23 +57,24 @@ static yed_event_handler eframe_act;
 static int               save_hz;
 
 /* command replacement functions*/
-static void _special_buffer_prepare_focus(int n_args, char **args);
-static void _special_buffer_prepare_unfocus(int n_args, char **args);
-static void _special_buffer_prepare_unfocus_active(int n_args, char **args);
+static void            _special_buffer_prepare_focus(int n_args, char **args);
+static void            _special_buffer_prepare_unfocus(int n_args, char **args);
+static void            _special_buffer_prepare_unfocus_active(int n_args, char **args);
 
 /* internal functions*/
-static void _unfocus(char *buffer);
-static void _start_tray_animate(int rows);
-static void _tray_animate(yed_event *event);
-static void _custom_frames_unload(yed_plugin *self);
-static void _create_new_frame(char loc, char use_root, float size, int heirarchy);
-static void _start_frame_animate(void);
-static void _frame_animate(yed_event *event);
-static void _frame_animate_on_change(yed_event *event);
-static void _start(custom_buffer_data **data_it, int min);
+static void            _unfocus(char *buffer);
+static void            _start_tray_animate(int rows);
+static void            _tray_animate(yed_event *event);
+static void            _custom_frames_unload(yed_plugin *self);
+static void            _create_new_frame(char loc, char use_root, float size, int heirarchy);
+static void            _start_frame_animate(void);
+static void            _frame_animate(yed_event *event);
+static void            _frame_animate_on_change(yed_event *event);
+static yed_frame_tree *_find_tree_from_heirarchy(yed_frame_tree *root, int heirarchy);
+static void            _start(custom_buffer_data **data_it, int min);
 
 /* new command functions*/
-static void set_custom_buffer_frame(int n_args, char **args);
+static void            set_custom_buffer_frame(int n_args, char **args);
 
 int yed_plugin_boot(yed_plugin *self) {
 
@@ -138,7 +139,7 @@ static void _special_buffer_prepare_focus(int n_args, char **args) {
                         if ((*data_it)->max_frame_size.split_type == 'v') {
                             if ((*data_it)->max_frame_size.loc == 'l') {
                                 if ((*data_it)->max_frame_size.use_root == 'r') {
-                                    frame_tree = yed_frame_tree_get_root(ys->active_frame->tree);
+                                    frame_tree = _find_tree_from_heirarchy(yed_frame_tree_get_root(ys->active_frame->tree), (*data_it)->max_frame_size.heirarchy);
                                 } else {
                                     frame_tree = ys->active_frame->tree;
                                 }
@@ -148,7 +149,7 @@ static void _special_buffer_prepare_focus(int n_args, char **args) {
                                 yed_frame_tree_swap_children(frame_tree);
                             } else {
                                 if ((*data_it)->max_frame_size.use_root == 'r') {
-                                    frame_tree = yed_frame_tree_get_root(ys->active_frame->tree);
+                                    frame_tree = _find_tree_from_heirarchy(yed_frame_tree_get_root(ys->active_frame->tree), (*data_it)->max_frame_size.heirarchy);
                                 } else {
                                     frame_tree = ys->active_frame->tree;
                                 }
@@ -161,7 +162,7 @@ static void _special_buffer_prepare_focus(int n_args, char **args) {
                         } else {
                             if ((*data_it)->max_frame_size.loc == 't') {
                                 if ((*data_it)->max_frame_size.use_root == 'r') {
-                                    frame_tree = yed_frame_tree_get_root(ys->active_frame->tree);
+                                    frame_tree = _find_tree_from_heirarchy(yed_frame_tree_get_root(ys->active_frame->tree), (*data_it)->max_frame_size.heirarchy);
                                 } else {
                                     frame_tree = ys->active_frame->tree;
                                 }
@@ -171,7 +172,7 @@ static void _special_buffer_prepare_focus(int n_args, char **args) {
                                 yed_frame_tree_swap_children(frame_tree);
                             } else {
                                 if ((*data_it)->max_frame_size.use_root == 'r') {
-                                    frame_tree = yed_frame_tree_get_root(ys->active_frame->tree);
+                                    frame_tree = _find_tree_from_heirarchy(yed_frame_tree_get_root(ys->active_frame->tree), (*data_it)->max_frame_size.heirarchy);
                                 } else {
                                     frame_tree = ys->active_frame->tree;
                                 }
@@ -203,6 +204,85 @@ static void _special_buffer_prepare_focus(int n_args, char **args) {
             }
         }
     }
+}
+
+static void _search(yed_frame_tree *curr_frame_tree, yed_frame_tree *saved_frame_tree, int *largest_smaller_heirarchy, int heirarchy) {
+    custom_buffer_data **data_it;
+
+    if (curr_frame_tree->is_leaf) { return; }
+
+    if (curr_frame_tree              &&
+        curr_frame_tree->child_trees &&
+        curr_frame_tree->child_trees[0]) {
+
+        if (curr_frame_tree->child_trees[0]->is_leaf) {
+            if (curr_frame_tree->child_trees[0]->frame   &&
+                curr_frame_tree->child_trees[0]->frame->name){
+
+                array_traverse(custom_frame_buffers, data_it) {
+                    if (strcmp((*data_it)->frame_name, curr_frame_tree->child_trees[0]->frame->name) == 0) {
+                        if ((*data_it)->max_frame_size.heirarchy < heirarchy && heirarchy > *largest_smaller_heirarchy) {
+                            memcpy(largest_smaller_heirarchy, &heirarchy, sizeof(int));
+                            memcpy(saved_frame_tree, curr_frame_tree->child_trees[0], sizeof(yed_frame_tree));
+                        }
+                        break;
+                    }
+                }
+            }
+        } else {
+            _search(curr_frame_tree->child_trees[0], saved_frame_tree, largest_smaller_heirarchy, heirarchy);
+        }
+    }
+
+    if (curr_frame_tree              &&
+        curr_frame_tree->child_trees &&
+        curr_frame_tree->child_trees[1]) {
+
+        if (curr_frame_tree->child_trees[1]->is_leaf) {
+            if (curr_frame_tree->child_trees[1]->frame   &&
+                curr_frame_tree->child_trees[1]->frame->name){
+
+                array_traverse(custom_frame_buffers, data_it) {
+                    if (strcmp((*data_it)->frame_name, curr_frame_tree->child_trees[1]->frame->name) == 0) {
+                        if ((*data_it)->max_frame_size.heirarchy < heirarchy && heirarchy > *largest_smaller_heirarchy) {
+                            memcpy(largest_smaller_heirarchy, &heirarchy, sizeof(int));
+                            memcpy(saved_frame_tree, curr_frame_tree->child_trees[1], sizeof(yed_frame_tree));
+                        }
+                        break;
+                    }
+                }
+            }
+        } else {
+            _search(curr_frame_tree->child_trees[1], saved_frame_tree, largest_smaller_heirarchy, heirarchy);
+        }
+    }
+}
+
+static yed_frame_tree *_find_tree_from_heirarchy(yed_frame_tree *root, int heirarchy) {
+    yed_frame_tree      *frame_tree;
+    yed_frame_tree      *saved_frame_tree;
+    yed_frame           *frame;
+    int                  largest_smaller_heirarchy = -1;
+    int                  done = 0;
+
+    frame_tree = root;
+    saved_frame_tree = malloc(sizeof(yed_frame_tree));
+
+    _search(root, saved_frame_tree, &largest_smaller_heirarchy, heirarchy);
+
+    if (saved_frame_tree && largest_smaller_heirarchy > -1) {
+        if (saved_frame_tree->parent) {
+            if (saved_frame_tree->parent->child_trees[0] == saved_frame_tree) {
+                frame_tree = saved_frame_tree->parent->child_trees[1];
+            } else {
+                frame_tree = saved_frame_tree->parent->child_trees[0];
+            }
+        } else {
+            frame_tree = saved_frame_tree;
+        }
+    }
+
+    return frame_tree;
 }
 
 static void _add_frame_to_animate(int want_size, int speed, char *frame_name, int r_c, int s_l) {
