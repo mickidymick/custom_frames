@@ -73,6 +73,8 @@ static void            _frame_animate(yed_event *event);
 static void            _frame_animate_on_change(yed_event *event);
 static yed_frame_tree *_find_tree_from_heirarchy(yed_frame_tree *root, int heirarchy);
 static void            _start(custom_buffer_data **data_it, int min, int close_after);
+static void            _search(yed_frame_tree *curr_frame_tree, yed_frame_tree *saved_frame_tree,
+                               int *largest_smaller_heirarchy, int heirarchy, int *r_l);
 
 /* new command functions*/
 static void            set_custom_buffer_frame(int n_args, char **args);
@@ -218,7 +220,7 @@ static void _special_buffer_prepare_focus(int n_args, char **args) {
     yed_activate_frame(frame);
 }
 
-static void _search(yed_frame_tree *curr_frame_tree, yed_frame_tree *saved_frame_tree, int *largest_smaller_heirarchy, int heirarchy) {
+static void _search(yed_frame_tree *curr_frame_tree, yed_frame_tree *saved_frame_tree, int *largest_smaller_heirarchy, int heirarchy, int *r_l) {
     custom_buffer_data **data_it;
 
     if (curr_frame_tree->is_leaf) { return; }
@@ -227,6 +229,8 @@ static void _search(yed_frame_tree *curr_frame_tree, yed_frame_tree *saved_frame
         curr_frame_tree->child_trees &&
         curr_frame_tree->child_trees[0]) {
 
+/*         yed_log("[0]\n"); */
+
         if (curr_frame_tree->child_trees[0]->is_leaf) {
             if (curr_frame_tree->child_trees[0]->frame   &&
                 curr_frame_tree->child_trees[0]->frame->name){
@@ -234,21 +238,26 @@ static void _search(yed_frame_tree *curr_frame_tree, yed_frame_tree *saved_frame
                 array_traverse(custom_frame_buffers, data_it) {
                     if (strcmp((*data_it)->frame_name, curr_frame_tree->child_trees[0]->frame->name) == 0) {
                         if ((*data_it)->max_frame_size.heirarchy < heirarchy && heirarchy > *largest_smaller_heirarchy) {
+/*                             yed_log("save h:%d frame:%s\n", heirarchy, curr_frame_tree->child_trees[0]->frame->name); */
                             memcpy(largest_smaller_heirarchy, &heirarchy, sizeof(int));
                             memcpy(saved_frame_tree, curr_frame_tree->child_trees[0], sizeof(yed_frame_tree));
+                            *r_l = 0;
                         }
                         break;
                     }
                 }
             }
         } else {
-            _search(curr_frame_tree->child_trees[0], saved_frame_tree, largest_smaller_heirarchy, heirarchy);
+/*             yed_log("->[0]\n"); */
+            _search(curr_frame_tree->child_trees[0], saved_frame_tree, largest_smaller_heirarchy, heirarchy, r_l);
         }
     }
 
     if (curr_frame_tree              &&
         curr_frame_tree->child_trees &&
         curr_frame_tree->child_trees[1]) {
+
+/*         yed_log("[1]\n"); */
 
         if (curr_frame_tree->child_trees[1]->is_leaf) {
             if (curr_frame_tree->child_trees[1]->frame   &&
@@ -257,15 +266,18 @@ static void _search(yed_frame_tree *curr_frame_tree, yed_frame_tree *saved_frame
                 array_traverse(custom_frame_buffers, data_it) {
                     if (strcmp((*data_it)->frame_name, curr_frame_tree->child_trees[1]->frame->name) == 0) {
                         if ((*data_it)->max_frame_size.heirarchy < heirarchy && heirarchy > *largest_smaller_heirarchy) {
+/*                             yed_log("save h:%d frame:%s\n", heirarchy, curr_frame_tree->child_trees[1]->frame->name); */
                             memcpy(largest_smaller_heirarchy, &heirarchy, sizeof(int));
                             memcpy(saved_frame_tree, curr_frame_tree->child_trees[1], sizeof(yed_frame_tree));
+                            *r_l = 1;
                         }
                         break;
                     }
                 }
             }
         } else {
-            _search(curr_frame_tree->child_trees[1], saved_frame_tree, largest_smaller_heirarchy, heirarchy);
+/*             yed_log("->[1]\n"); */
+            _search(curr_frame_tree->child_trees[1], saved_frame_tree, largest_smaller_heirarchy, heirarchy, r_l);
         }
     }
 }
@@ -274,19 +286,24 @@ static yed_frame_tree *_find_tree_from_heirarchy(yed_frame_tree *root, int heira
     yed_frame_tree      *frame_tree;
     yed_frame_tree      *saved_frame_tree;
     yed_frame           *frame;
+    int                  r_l = 0;
     int                  largest_smaller_heirarchy = -1;
     int                  done = 0;
 
     frame_tree = root;
     saved_frame_tree = malloc(sizeof(yed_frame_tree));
 
-    _search(root, saved_frame_tree, &largest_smaller_heirarchy, heirarchy);
+/*     yed_log("search\n"); */
+    _search(root, saved_frame_tree, &largest_smaller_heirarchy, heirarchy, &r_l);
 
     if (saved_frame_tree && largest_smaller_heirarchy > -1) {
         if (saved_frame_tree->parent) {
-            if (saved_frame_tree->parent->child_trees[0] == saved_frame_tree) {
+/*             yed_log("%llx %llx\n", saved_frame_tree->parent->child_trees[0], saved_frame_tree); */
+            if (!r_l) {
+/*                 yed_log("use [1]\n"); */
                 frame_tree = saved_frame_tree->parent->child_trees[1];
             } else {
+/*                 yed_log("use [0]\n"); */
                 frame_tree = saved_frame_tree->parent->child_trees[0];
             }
         } else {
@@ -433,13 +450,6 @@ static void _frame_animate_on_change(yed_event *event) {
                     if ((*data_it)->use_animation == 1) {
                         _start(data_it, 0, 0);
                     }
-
-/*                     if ((*data_it)->close_after) { */
-/*                         array_traverse(current_animations, curr_anim) { */
-/*                             frame = yed_find_frame_by_name(curr_anim->frame_name); */
-/*                         } */
-/*                         if (frame) { yed_delete_frame(frame); } */
-/*                     } */
                     break;
                 }
             }
@@ -451,13 +461,6 @@ static void _frame_animate_on_change(yed_event *event) {
                     if ((*data_it)->use_animation == 1) {
                         _start(data_it, 0, 0);
                     }
-
-/*                     if ((*data_it)->close_after) { */
-/*                         array_traverse(current_animations, curr_anim) { */
-/*                             frame = yed_find_frame_by_name(curr_anim->frame_name); */
-/*                         } */
-/*                         if (frame) { yed_delete_frame(frame); } */
-/*                     } */
                     break;
                 }
             }
@@ -468,14 +471,12 @@ static void _frame_animate_on_change(yed_event *event) {
                 if (strcmp((*data_it)->frame_name, ys->active_frame->name) == 0) {
                     if ((*data_it)->use_animation == 1) {
                         _start(data_it, 1, (*data_it)->close_after);
+                    }else {
+                        if ((*data_it)->close_after) {
+                            frame = yed_find_frame_by_name((*data_it)->frame_name);
+                            if (frame) { yed_delete_frame(frame); }
+                        }
                     }
-
-/*                     if ((*data_it)->close_after) { */
-/*                         array_traverse(current_animations, curr_anim) { */
-/*                             frame = yed_find_frame_by_name(curr_anim->frame_name); */
-/*                         } */
-/*                         if (frame) { yed_delete_frame(frame); } */
-/*                     } */
                     break;
                 }
             }
