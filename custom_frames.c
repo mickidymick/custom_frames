@@ -59,6 +59,7 @@ static int               save_hz;
 
 /* command replacement functions*/
 static void            _special_buffer_prepare_focus(int n_args, char **args);
+static void            _special_buffer_prepare_jump_focus(int n_args, char **args);
 static void            _special_buffer_prepare_unfocus(int n_args, char **args);
 static void            _special_buffer_prepare_unfocus_active(int n_args, char **args);
 
@@ -96,6 +97,7 @@ int yed_plugin_boot(yed_plugin *self) {
     yed_plugin_add_event_handler(Self, eframe_act);
 
     yed_plugin_set_command(self, "special-buffer-prepare-focus", _special_buffer_prepare_focus);
+    yed_plugin_set_command(self, "special-buffer-prepare-jump-focus", _special_buffer_prepare_jump_focus);
     yed_plugin_set_command(self, "special-buffer-prepare-unfocus", _special_buffer_prepare_unfocus);
     yed_plugin_set_command(self, "special-buffer-prepare-unfocus-active", _special_buffer_prepare_unfocus_active);
     yed_plugin_set_command(self, "set-custom-buffer-frame", set_custom_buffer_frame);
@@ -103,6 +105,16 @@ int yed_plugin_boot(yed_plugin *self) {
     yed_plugin_set_unload_fn(self, _custom_frames_unload);
 
     return 0;
+}
+
+static void _special_buffer_prepare_jump_focus(int n_args, char **args) {
+
+    if (n_args != 1) {
+        yed_cerr("expected 1 argument, but got %d", n_args);
+        return;
+    }
+
+    yed_log("******** %s **********", args[0]);
 }
 
 static void _special_buffer_prepare_focus(int n_args, char **args) {
