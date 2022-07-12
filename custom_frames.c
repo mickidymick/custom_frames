@@ -114,7 +114,14 @@ static void _special_buffer_prepare_jump_focus(int n_args, char **args) {
         return;
     }
 
-    yed_log("******** %s **********", args[0]);
+    YEXE("special-buffer-prepare-unfocus", ys->active_frame->buffer->name);
+    if (args[0][0] == '*') {
+        YEXE("special-buffer-prepare-focus", args[0]);
+    } else {
+        if (save_frame) {
+            yed_activate_frame(save_frame);
+        }
+    }
 }
 
 static void _special_buffer_prepare_focus(int n_args, char **args) {
@@ -205,12 +212,19 @@ static void _special_buffer_prepare_focus(int n_args, char **args) {
                 }
 
                 if ((*data_it)->use_animation) {
-                    if ((*data_it)->max_frame_size.split_type == 'v') {
-                        cols = ys->term_cols * (*data_it)->min_frame_size.size;
-                        yed_resize_frame(frame, 0, cols - frame->width);
+                    if ((*data_it)->is_split == 'f') {
+                        rows = ys->term_rows * (*data_it)->min_frame_size.f_height;
+                        cols = ys->term_cols * (*data_it)->min_frame_size.f_width;
+                        yed_resize_frame(frame, rows, cols);
+                        yed_frame_set_pos(frame, (*data_it)->min_frame_size.f_y, (*data_it)->min_frame_size.f_x);
                     } else {
-                        rows = ys->term_rows * (*data_it)->min_frame_size.size;
-                        yed_resize_frame(frame, rows - frame->height, 0);
+                        if ((*data_it)->max_frame_size.split_type == 'v') {
+                            cols = ys->term_cols * (*data_it)->min_frame_size.size;
+                            yed_resize_frame(frame, 0, cols - frame->width);
+                        } else {
+                            rows = ys->term_rows * (*data_it)->min_frame_size.size;
+                            yed_resize_frame(frame, rows - frame->height, 0);
+                        }
                     }
                 }
                 yed_activate_frame(frame);
@@ -227,6 +241,8 @@ static void _special_buffer_prepare_focus(int n_args, char **args) {
         return;
     }
 
+    save_frame = ys->active_frame;
+
     frame = yed_add_new_frame(0.15, 0.15, 0.7, 0.7);
     yed_clear_frame(frame);
     yed_activate_frame(frame);
@@ -241,8 +257,6 @@ static void _search(yed_frame_tree *curr_frame_tree, yed_frame_tree *saved_frame
         curr_frame_tree->child_trees &&
         curr_frame_tree->child_trees[0]) {
 
-/*         yed_log("[0]\n"); */
-
         if (curr_frame_tree->child_trees[0]->is_leaf) {
             if (curr_frame_tree->child_trees[0]->frame   &&
                 curr_frame_tree->child_trees[0]->frame->name){
@@ -250,7 +264,6 @@ static void _search(yed_frame_tree *curr_frame_tree, yed_frame_tree *saved_frame
                 array_traverse(custom_frame_buffers, data_it) {
                     if (strcmp((*data_it)->frame_name, curr_frame_tree->child_trees[0]->frame->name) == 0) {
                         if ((*data_it)->max_frame_size.heirarchy < heirarchy && heirarchy > *largest_smaller_heirarchy) {
-/*                             yed_log("save h:%d frame:%s\n", heirarchy, curr_frame_tree->child_trees[0]->frame->name); */
                             memcpy(largest_smaller_heirarchy, &heirarchy, sizeof(int));
                             memcpy(saved_frame_tree, curr_frame_tree->child_trees[0], sizeof(yed_frame_tree));
                             *r_l = 0;
@@ -260,7 +273,6 @@ static void _search(yed_frame_tree *curr_frame_tree, yed_frame_tree *saved_frame
                 }
             }
         } else {
-/*             yed_log("->[0]\n"); */
             _search(curr_frame_tree->child_trees[0], saved_frame_tree, largest_smaller_heirarchy, heirarchy, r_l);
         }
     }
@@ -269,8 +281,6 @@ static void _search(yed_frame_tree *curr_frame_tree, yed_frame_tree *saved_frame
         curr_frame_tree->child_trees &&
         curr_frame_tree->child_trees[1]) {
 
-/*         yed_log("[1]\n"); */
-
         if (curr_frame_tree->child_trees[1]->is_leaf) {
             if (curr_frame_tree->child_trees[1]->frame   &&
                 curr_frame_tree->child_trees[1]->frame->name){
@@ -278,7 +288,6 @@ static void _search(yed_frame_tree *curr_frame_tree, yed_frame_tree *saved_frame
                 array_traverse(custom_frame_buffers, data_it) {
                     if (strcmp((*data_it)->frame_name, curr_frame_tree->child_trees[1]->frame->name) == 0) {
                         if ((*data_it)->max_frame_size.heirarchy < heirarchy && heirarchy > *largest_smaller_heirarchy) {
-/*                             yed_log("save h:%d frame:%s\n", heirarchy, curr_frame_tree->child_trees[1]->frame->name); */
                             memcpy(largest_smaller_heirarchy, &heirarchy, sizeof(int));
                             memcpy(saved_frame_tree, curr_frame_tree->child_trees[1], sizeof(yed_frame_tree));
                             *r_l = 1;
@@ -288,7 +297,6 @@ static void _search(yed_frame_tree *curr_frame_tree, yed_frame_tree *saved_frame
                 }
             }
         } else {
-/*             yed_log("->[1]\n"); */
             _search(curr_frame_tree->child_trees[1], saved_frame_tree, largest_smaller_heirarchy, heirarchy, r_l);
         }
     }
@@ -305,17 +313,13 @@ static yed_frame_tree *_find_tree_from_heirarchy(yed_frame_tree *root, int heira
     frame_tree = root;
     saved_frame_tree = malloc(sizeof(yed_frame_tree));
 
-/*     yed_log("search\n"); */
     _search(root, saved_frame_tree, &largest_smaller_heirarchy, heirarchy, &r_l);
 
     if (saved_frame_tree && largest_smaller_heirarchy > -1) {
         if (saved_frame_tree->parent) {
-/*             yed_log("%llx %llx\n", saved_frame_tree->parent->child_trees[0], saved_frame_tree); */
             if (!r_l) {
-/*                 yed_log("use [1]\n"); */
                 frame_tree = saved_frame_tree->parent->child_trees[1];
             } else {
-/*                 yed_log("use [0]\n"); */
                 frame_tree = saved_frame_tree->parent->child_trees[0];
             }
         } else {
