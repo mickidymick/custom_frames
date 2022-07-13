@@ -34,7 +34,7 @@ typedef struct {
 /*     internal */
     int _max_r_c;
     int _min_r_c;
-    int r_c;
+    int _r_c;
 } custom_buffer_animation;
 
 typedef struct {
@@ -48,14 +48,14 @@ typedef struct {
     custom_buffer_animation  animation;
 } custom_buffer_data;
 
-static yed_plugin       *Self;
-static yed_frame        *save_frame;
-static array_t           custom_frame_buffers;
-static array_t           current_animations;
-static int               animating;
-static yed_event_handler epump_anim;
-static yed_event_handler eframe_act;
-static int               save_hz;
+static yed_plugin        *Self;
+static yed_frame         *save_frame;
+static array_t            custom_frame_buffers;
+static array_t            current_animations;
+static int                animating;
+static yed_event_handler  epump_anim;
+static yed_event_handler  eframe_act;
+static int                save_hz;
 
 /* command replacement functions*/
 static void            _special_buffer_prepare_focus(int n_args, char **args);
@@ -303,12 +303,12 @@ static void _search(yed_frame_tree *curr_frame_tree, yed_frame_tree *saved_frame
 }
 
 static yed_frame_tree *_find_tree_from_heirarchy(yed_frame_tree *root, int heirarchy) {
-    yed_frame_tree      *frame_tree;
-    yed_frame_tree      *saved_frame_tree;
-    yed_frame           *frame;
-    int                  r_l = 0;
-    int                  largest_smaller_heirarchy = -1;
-    int                  done = 0;
+    yed_frame_tree *frame_tree;
+    yed_frame_tree *saved_frame_tree;
+    yed_frame      *frame;
+    int             r_l = 0;
+    int             largest_smaller_heirarchy = -1;
+    int             done = 0;
 
     frame_tree = root;
     saved_frame_tree = malloc(sizeof(yed_frame_tree));
@@ -387,6 +387,7 @@ static void _frame_animate(yed_event *event) {
     yed_frame_tree    *other;
     int                curr_size;
     current_animation *curr_anim;
+    int                indx;
 
     array_traverse(current_animations, curr_anim) {
 
@@ -433,7 +434,7 @@ static void _frame_animate(yed_event *event) {
     }
 
 check_again:;
-    int indx = 0;
+    indx = 0;
     array_traverse(current_animations, curr_anim) {
         if (curr_anim->done == 1) {
             if (curr_anim->close_after) {
@@ -499,18 +500,18 @@ static void _frame_animate_on_change(yed_event *event) {
         }
     }
 
-_start_frame_animate();
+    _start_frame_animate();
 }
 
 static void _start(custom_buffer_data **data_it, int min, int close_after) {
     if (min) {
-        if ((*data_it)->animation.r_c) {
+        if ((*data_it)->animation._r_c) {
             _add_frame_to_animate((*data_it)->min_frame_size.size * ys->term_cols, (*data_it)->animation.speed, (*data_it)->frame_name, 1, 0, close_after);
         } else {
             _add_frame_to_animate((*data_it)->min_frame_size.size * ys->term_rows, (*data_it)->animation.speed, (*data_it)->frame_name, 0, 0, close_after);
         }
     } else {
-        if ((*data_it)->animation.r_c) {
+        if ((*data_it)->animation._r_c) {
             _add_frame_to_animate((*data_it)->max_frame_size.size * ys->term_cols, (*data_it)->animation.speed, (*data_it)->frame_name, 1, 1, close_after);
         } else {
             _add_frame_to_animate((*data_it)->max_frame_size.size * ys->term_rows, (*data_it)->animation.speed, (*data_it)->frame_name, 0, 1, close_after);
@@ -526,16 +527,6 @@ static void _unfocus(char *buffer) {
     array_traverse(custom_frame_buffers, data_it) {
         array_traverse((*data_it)->buff_name, data_it_inner) {
             if (strcmp((*data_it_inner), buffer) == 0) {
-                if ((*data_it)->use_animation == 0) {
-                    if (save_frame != NULL) {
-                        yed_activate_frame(save_frame);
-                    }
-                } else {
-                    if (save_frame != NULL) {
-                        yed_activate_frame(save_frame);
-                    }
-                }
-
                 if ((*data_it)->close_after) {
                     frame = yed_find_frame_by_name((*data_it)->frame_name);
                     if (frame == NULL) {
@@ -724,9 +715,9 @@ static void set_custom_buffer_frame(int n_args, char **args) {
             data->min_frame_size.size = atof(args[9]);
             data->animation.speed     = atoi(args[10]);
             if (data->max_frame_size.split_type == 'h') {
-                data->animation.r_c   = 0;
+                data->animation._r_c   = 0;
             } else {
-                data->animation.r_c   = 1;
+                data->animation._r_c   = 1;
             }
             buff_arr                  = strdup(args[11]);
         } else {
@@ -760,9 +751,6 @@ static void set_custom_buffer_frame(int n_args, char **args) {
 }
 
 static void _custom_frames_unload(yed_plugin *self) {
-    while (array_len(custom_frame_buffers) > 0) {
-        array_pop(custom_frame_buffers);
-    }
-
     array_free(custom_frame_buffers);
+    array_free(current_animations);
 }
