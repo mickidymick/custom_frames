@@ -153,7 +153,6 @@ static void _special_buffer_prepare_focus(int n_args, char **args) {
                                                   (*data_it)->max_frame_size.f_width);
                         yed_frame_set_name(frame, (*data_it)->frame_name);
                     }
-                    save_frame = ys->active_frame;
                 } else {
                     frame = yed_find_frame_by_name((*data_it)->frame_name);
 
@@ -208,7 +207,6 @@ static void _special_buffer_prepare_focus(int n_args, char **args) {
 
                         yed_frame_set_name(frame, (*data_it)->frame_name);
                     }
-                    save_frame = ys->active_frame;
                 }
 
                 if ((*data_it)->use_animation) {
@@ -227,6 +225,8 @@ static void _special_buffer_prepare_focus(int n_args, char **args) {
                         }
                     }
                 }
+
+                save_frame = ys->active_frame;
                 yed_activate_frame(frame);
 
                 return;
@@ -234,14 +234,14 @@ static void _special_buffer_prepare_focus(int n_args, char **args) {
         }
     }
 
+    save_frame = ys->active_frame;
+
     if (ys->active_frame
     &&  ys->active_frame->buffer
     &&  strcmp(ys->active_frame->buffer->name, args[0]) == 0) {
         /* It's already focused. Don't do anything. */
         return;
     }
-
-    save_frame = ys->active_frame;
 
     frame = yed_add_new_frame(0.15, 0.15, 0.7, 0.7);
     yed_clear_frame(frame);
@@ -538,8 +538,6 @@ static void _unfocus(char *buffer) {
             }
         }
     }
-
-    save_frame = NULL;
 }
 
 static void _special_buffer_prepare_unfocus(int n_args, char **args) {
