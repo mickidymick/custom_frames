@@ -114,7 +114,8 @@ static void _special_buffer_prepare_jump_focus(int n_args, char **args) {
         return;
     }
 
-    YEXE("special-buffer-prepare-unfocus", ys->active_frame->buffer->name);
+/*     YEXE("special-buffer-prepare-unfocus", ys->active_frame->buffer->name); */
+    _unfocus(ys->active_frame->buffer->name);
     if (args[0][0] == '*') {
         YEXE("special-buffer-prepare-focus", args[0]);
     } else {
@@ -548,6 +549,10 @@ static void _special_buffer_prepare_unfocus(int n_args, char **args) {
     }
 
     _unfocus(args[0]);
+
+    if (save_frame) {
+        yed_activate_frame(save_frame);
+    }
 }
 
 static void _special_buffer_prepare_unfocus_active(int n_args, char **args) {
