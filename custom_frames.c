@@ -92,6 +92,7 @@ static void            _search(yed_frame_tree *curr_frame_tree, yed_frame_tree *
 
 /* new command functions*/
 static void            set_custom_buffer_frame(int n_args, char **args);
+static void            special_buffer_prepare_focus_custom(int n_args, char **args);
 
 int yed_plugin_boot(yed_plugin *self) {
 
@@ -109,6 +110,7 @@ int yed_plugin_boot(yed_plugin *self) {
 
     yed_plugin_add_event_handler(Self, eframe_act);
 
+    yed_plugin_set_command(self, "special-buffer-prepare-focus-custom", special_buffer_prepare_focus_custom);
     yed_plugin_set_command(self, "special-buffer-prepare-focus", _special_buffer_prepare_focus);
     yed_plugin_set_command(self, "special-buffer-prepare-jump-focus", _special_buffer_prepare_jump_focus);
     yed_plugin_set_command(self, "special-buffer-prepare-unfocus", _special_buffer_prepare_unfocus);
@@ -118,6 +120,14 @@ int yed_plugin_boot(yed_plugin *self) {
     yed_plugin_set_unload_fn(self, _custom_frames_unload);
 
     return 0;
+}
+
+static void special_buffer_prepare_focus_custom(int n_args, char **args) {
+    yed_frame           *frame;
+
+    frame = yed_add_new_frame(0.15, 0.15, 0.7, 0.7);
+    yed_clear_frame(frame);
+    yed_activate_frame(frame);
 }
 
 static void _special_buffer_prepare_jump_focus(int n_args, char **args) {
@@ -261,9 +271,7 @@ static void _special_buffer_prepare_focus(int n_args, char **args) {
         return;
     }
 
-    frame = yed_add_new_frame(0.15, 0.15, 0.7, 0.7);
-    yed_clear_frame(frame);
-    yed_activate_frame(frame);
+    yed_execute_command("special-buffer-prepare-focus-custom", n_args, args);
 }
 
 static void _search(yed_frame_tree *curr_frame_tree, yed_frame_tree *saved_frame_tree, int *largest_smaller_heirarchy, int heirarchy, int *r_l) {
