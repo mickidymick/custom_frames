@@ -1,5 +1,20 @@
 #include <yed/plugin.h>
 
+#define DO_LOG
+
+#define DBG__XSTR(x) #x
+#define DBG_XSTR(x) DBG__XSTR(x)
+#ifdef DO_LOG
+#define DBG(...)                                           \
+do {                                                       \
+    LOG_FN_ENTER();                                        \
+    yed_log(__FILE__ ":" XSTR(__LINE__) ": " __VA_ARGS__); \
+    LOG_EXIT();                                            \
+} while (0)
+#else
+#define DBG(...) ;
+#endif
+
 typedef union {
     struct {
 /*         floating */
@@ -123,11 +138,25 @@ int yed_plugin_boot(yed_plugin *self) {
 }
 
 static void special_buffer_prepare_focus_custom(int n_args, char **args) {
-    yed_frame           *frame;
+    yed_frame *frame;
+/*     int        found; */
 
-    frame = yed_add_new_frame(0.15, 0.15, 0.7, 0.7);
-    yed_clear_frame(frame);
-    yed_activate_frame(frame);
+/*     found = 0; */
+/*     array_traverse(custom_frame_buffers, data_it) { */
+/*         array_traverse((*data_it)->buff_name, data_it_inner) { */
+/*             if (strcmp((*data_it_inner), args[0]) == 0) { */
+/*                 found = 1; */
+/*                 goto cont; */
+/*             } */
+/*         } */
+/*     } */
+/* cont:; */
+/*  */
+/*     if (!found) { */
+        frame = yed_add_new_frame(0.15, 0.15, 0.7, 0.7);
+        yed_clear_frame(frame);
+        yed_activate_frame(frame);
+/*     } */
 }
 
 static void _special_buffer_prepare_jump_focus(int n_args, char **args) {
@@ -368,6 +397,10 @@ static void _add_frame_to_animate(int s_l, int close_after, int want_size, custo
     curr_anim.close_after = close_after;
     curr_anim.first       = 1;
     curr_anim.want_size   = want_size;
+    curr_anim.x_last      = -1;
+    curr_anim.y_last      = -1;
+    curr_anim.w_last      = -1;
+    curr_anim.h_last      = -1;
 
     frame = yed_find_frame_by_name(curr_anim.data->frame_name);
     if (!frame) { return; }
@@ -712,7 +745,7 @@ static void _frame_animate_on_change(yed_event *event) {
             }
         }
     } else {
-/*         make smaller */
+/*         make larger */
         if (event->frame->name) {
             array_traverse(custom_frame_buffers, data_it) {
                 if (strcmp((*data_it)->frame_name, event->frame->name) == 0) {
@@ -723,7 +756,7 @@ static void _frame_animate_on_change(yed_event *event) {
                 }
             }
         }
-/*         make larger */
+/*         make smaller */
         if (ys->active_frame->name) {
             array_traverse(custom_frame_buffers, data_it) {
                 if (strcmp((*data_it)->frame_name, ys->active_frame->name) == 0) {
@@ -732,9 +765,7 @@ static void _frame_animate_on_change(yed_event *event) {
                     }else {
                         if ((*data_it)->close_after) {
                             frame = yed_find_frame_by_name((*data_it)->frame_name);
-                            if (frame->name && frame->name == ys->active_frame->name) {
-                                yed_frame_set_buff(frame, NULL);
-                            } else {
+                            if (frame && frame->name && frame->name == ys->active_frame->name) {
                                 yed_delete_frame(frame);
                             }
                         }
