@@ -69,6 +69,10 @@ typedef struct {
     int                 y_s_l;
     int                 w_s_l;
     int                 h_s_l;
+    int                 x_wait;
+    int                 y_wait;
+    int                 w_wait;
+    int                 h_wait;
     int                 x_last;
     int                 y_last;
     int                 w_last;
@@ -397,6 +401,10 @@ static void _add_frame_to_animate(int s_l, int close_after, int want_size, custo
     curr_anim.close_after = close_after;
     curr_anim.first       = 1;
     curr_anim.want_size   = want_size;
+    curr_anim.x_wait      = 0;
+    curr_anim.y_wait      = 0;
+    curr_anim.w_wait      = 0;
+    curr_anim.h_wait      = 0;
     curr_anim.x_last      = -1;
     curr_anim.y_last      = -1;
     curr_anim.w_last      = -1;
@@ -645,20 +653,46 @@ static void _frame_animate(yed_event *event) {
                 }
             }
 
+            DBG("BEFORE x:%d y:%d r:%d c:%d\n", x, y, row, col);
+
             if (x && frame->left == curr_anim->x_last) {
-                x = 0;
+                if (curr_anim->x_wait >= 5) {
+                    x = 0;
+                } else {
+                    curr_anim->x_wait++;
+                }
+            } else {
+                curr_anim->x_wait = 0;
             }
 
             if (y && frame->top == curr_anim->y_last) {
-                y = 0;
+                if (curr_anim->y_wait >= 5) {
+                    y = 0;
+                } else {
+                    curr_anim->y_wait++;
+                }
+            } else {
+                curr_anim->y_wait = 0;
             }
 
             if (col && frame->width == curr_anim->w_last) {
-                col = 0;
+                if (curr_anim->w_wait >= 5) {
+                    x = 0;
+                } else {
+                    curr_anim->w_wait++;
+                }
+            } else {
+                curr_anim->w_wait = 0;
             }
 
             if (row && frame->height == curr_anim->h_last) {
-                row = 0;
+                if (curr_anim->h_wait >= 5) {
+                    x = 0;
+                } else {
+                    curr_anim->h_wait++;
+                }
+            } else {
+                curr_anim->h_wait = 0;
             }
 
 /*                 animate */
