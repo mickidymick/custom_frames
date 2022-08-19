@@ -386,6 +386,8 @@ static yed_frame_tree *_find_tree_from_heirarchy(yed_frame_tree *root, int heira
         }
     }
 
+    free(saved_frame_tree);
+
     return frame_tree;
 }
 
@@ -1071,6 +1073,13 @@ static void set_custom_buffer_frame(int n_args, char **args) {
 }
 
 static void _custom_frames_unload(yed_plugin *self) {
+    custom_buffer_data **cbd_it;
+
+    array_traverse(custom_frame_buffers, cbd_it) {
+        free((*cbd_it)->frame_name);
+        free(*cbd_it);
+    }
     array_free(custom_frame_buffers);
+
     array_free(current_animations);
 }
